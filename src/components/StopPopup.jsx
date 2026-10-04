@@ -9,12 +9,16 @@ export default function StopPopup({
   onUpdate,
   onRemove,
   onSaveAsNew,
+  onSaveChanges,
   onClose,
 }) {
   if (!w || !container) return null;
 
   return createPortal(
-    <div className="flex w-56 flex-col gap-2 pb-1 text-slate-800">
+    <div
+      className="flex w-64 flex-col gap-2 pb-1 text-slate-800"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div className="mb-1 flex items-center justify-between border-b border-slate-200 pb-2">
         <h4 className="m-0 text-sm font-bold">Edit point</h4>
         <button
@@ -62,13 +66,22 @@ export default function StopPopup({
             ))}
           </select>
           {w.isDirty && w.dbId && (
-            <button
-              type="button"
-              onClick={() => onSaveAsNew(w.id)}
-              className="w-full rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
-            >
-              💾 Save as new stop
-            </button>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => onSaveChanges(w.id)}
+                className="flex-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+              >
+                💾 Save changes
+              </button>
+              <button
+                type="button"
+                onClick={() => onSaveAsNew(w.id)}
+                className="flex-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+              >
+                ✨ Save as new
+              </button>
+            </div>
           )}
         </>
       ) : (

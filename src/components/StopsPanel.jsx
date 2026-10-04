@@ -129,6 +129,7 @@ export default function StopsPanel({ mappingMode, stops }) {
             onUpdate={stops.onUpdate}
             onRemove={stops.onRemove}
             onSaveAsNew={stops.onSaveAsNew}
+            onSaveChanges={stops.onSaveChanges}
             onReplace={stops.onReplace}
             dragProps={{
               draggable: true,

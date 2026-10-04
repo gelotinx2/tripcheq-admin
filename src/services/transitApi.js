@@ -60,6 +60,21 @@ export function insertStop(w) {
     .single();
 }
 
+// Updates an existing stop record by its ID
+export async function updateTransitStop(stopId, fields) {
+  const { error } = await supabase
+    .from("transit_stops")
+    .update({
+      name: fields.name || "Unnamed Stop",
+      aliases: fields.aliases || "",
+      latitude: parseFloat(fields.latitude.toFixed(6)),
+      longitude: parseFloat(fields.longitude.toFixed(6)),
+      stop_type: fields.stop_type,
+    })
+    .eq("id", stopId);
+  return error;
+}
+
 async function upsertStop(w) {
   const payload = {
     ...(w.dbId ? { id: w.dbId } : {}),

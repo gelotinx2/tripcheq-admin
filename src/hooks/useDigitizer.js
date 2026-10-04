@@ -13,6 +13,7 @@ import {
   insertStop,
   saveBackbone,
   saveDetour,
+  updateTransitStop,
 } from "../services/transitApi";
 import { useBackboneForm } from "./useBackboneForm";
 import { useDetourForm } from "./useDetourForm";
@@ -25,6 +26,7 @@ import { useWaypoints } from "./useWaypoints";
 // Ties the data, map and form hooks together and holds the workflows
 // (load, reverse, snap, save, delete). Components only read what it returns.
 export function useDigitizer() {
+  const [isSaving, setIsSaving] = useState(false);
   const [mappingMode, setMappingMode] = useState("BACKBONE");
   const [nodeType, setNodeType] = useState("stop");
   const [routePolyline, setRoutePolyline] = useState(null);
@@ -137,10 +139,10 @@ export function useDigitizer() {
     setRoutePolyline(found.encoded_polyline);
     bb.setInboundDraftAvailable(false);
 
+    let decodedCoords = [];
     if (found.encoded_polyline) {
-      const coords = decodePolyline(found.encoded_polyline);
-      map.setRouteLine(coords);
-      if (coords.length > 0) map.flyTo(coords[0], 14);
+      decodedCoords = decodePolyline(found.encoded_polyline);
+      map.setRouteLine(decodedCoords);
     }
 
     const { data: rows, error } = await fetchBackboneStopRows(bbId);
@@ -149,9 +151,23 @@ export function useDigitizer() {
       setStatus("");
       return;
     }
+
+    let loadedWaypoints = [];
     if (rows) {
-      wp.load(rows.map((row) => stopRowToWaypoint(row, wp.nextId())));
+      loadedWaypoints = rows.map((row) => stopRowToWaypoint(row, wp.nextId()));
+      wp.load(loadedWaypoints);
     }
+
+    // Combine polyline coordinates and stop coordinates to calculate overall bounding box
+    const allPoints = [
+      ...decodedCoords,
+      ...loadedWaypoints.map((w) => [w.lng, w.lat]),
+    ];
+
+    if (allPoints.length > 0) {
+      map.fitBounds(allPoints);
+    }
+
     flash("✅ Backbone loaded successfully!");
   };
 
@@ -248,6 +264,31 @@ export function useDigitizer() {
     await data.refresh();
   };
 
+  const saveStopChanges = async (wId) => {
+    const target = wp.waypoints.find((w) => w.id === wId);
+    if (!target || !target.dbId) return;
+    setStatus("Saving stop changes...");
+
+    const error = await updateTransitStop(target.dbId, {
+      name: target.name,
+      aliases: target.aliases,
+      stop_type: target.stopType,
+      latitude: target.lat,
+      longitude: target.lng,
+    });
+
+    if (error) {
+      setStatus("");
+      return alert("Error updating stop: " + error.message);
+    }
+
+    wp.apply((prev) =>
+      prev.map((w) => (w.id === wId ? { ...w, isDirty: false } : w)),
+    );
+    flash("✅ Stop changes saved successfully!");
+    await data.refresh();
+  };
+
   const replaceStopWithExisting = (wId, dbStopId) => {
     if (!dbStopId) return;
     const stop = data.stops.find((s) => s.id === dbStopId);
@@ -303,52 +344,77 @@ export function useDigitizer() {
         "Please click 'Snap to Road' first to generate the polyline.",
       );
     }
-
+    setIsSaving(true);
     try {
-      if (mappingMode === "BACKBONE") {
-        if (!bb.routeSelect) {
-          return alert("Please select or create a Master Route first.");
+      const dirtyStops = wp.waypoints.filter(
+        (w) => w.type === "stop" && w.dbId && w.isDirty,
+      );
+      if (dirtyStops.length > 0) {
+        const confirmOverwrite = confirm(
+          `You have ${dirtyStops.length} edited stop(s) with unsaved changes. Do you want to overwrite these existing stops in the database?`,
+        );
+        if (!confirmOverwrite) return;
+
+        // Automatically push updates for dirty stops before saving backbone
+        for (const ds of dirtyStops) {
+          await updateTransitStop(ds.dbId, {
+            name: ds.name,
+            aliases: ds.aliases,
+            stop_type: ds.stopType,
+            latitude: ds.lat,
+            longitude: ds.lng,
+          });
         }
-        if (bb.routeSelect === "NEW" && !bb.newRouteName) {
-          return alert("Enter a name for the new route.");
-        }
-        setStatus("Saving Backbone & Polyline...");
-        const { routeId } = await saveBackbone({
-          routeSelect: bb.routeSelect,
-          newRouteName: bb.newRouteName,
-          newRouteMode: bb.newRouteMode,
-          direction: bb.direction,
-          polyline: routePolyline,
-          editId: bb.selectedEditId,
-          waypoints: wp.waypoints,
-        });
-        bb.setRouteSelect(routeId);
-      } else {
-        if (
-          !detour.backboneId ||
-          !detour.splitStopId ||
-          !detour.mergeStopId ||
-          !detour.name ||
-          !detour.triggerSignboard
-        ) {
-          return alert("Please fill out all Detour fields.");
-        }
-        setStatus("Saving Detour & Polyline...");
-        await saveDetour({
-          backboneId: detour.backboneId,
-          name: detour.name,
-          splitStopId: detour.splitStopId,
-          mergeStopId: detour.mergeStopId,
-          triggerSignboard: detour.triggerSignboard,
-          polyline: routePolyline,
-          waypoints: wp.waypoints,
-        });
       }
-      flash("✅ Successfully saved to Supabase!", 5000);
-      await data.refresh();
-    } catch (e) {
-      setStatus("");
-      alert(e.message);
+
+      try {
+        if (mappingMode === "BACKBONE") {
+          if (!bb.routeSelect) {
+            return alert("Please select or create a Master Route first.");
+          }
+          if (bb.routeSelect === "NEW" && !bb.newRouteName) {
+            return alert("Enter a name for the new route.");
+          }
+          setStatus("Saving Backbone & Polyline...");
+          const { routeId } = await saveBackbone({
+            routeSelect: bb.routeSelect,
+            newRouteName: bb.newRouteName,
+            newRouteMode: bb.newRouteMode,
+            direction: bb.direction,
+            polyline: routePolyline,
+            editId: bb.selectedEditId,
+            waypoints: wp.waypoints,
+          });
+          bb.setRouteSelect(routeId);
+        } else {
+          if (
+            !detour.backboneId ||
+            !detour.splitStopId ||
+            !detour.mergeStopId ||
+            !detour.name ||
+            !detour.triggerSignboard
+          ) {
+            return alert("Please fill out all Detour fields.");
+          }
+          setStatus("Saving Detour & Polyline...");
+          await saveDetour({
+            backboneId: detour.backboneId,
+            name: detour.name,
+            splitStopId: detour.splitStopId,
+            mergeStopId: detour.mergeStopId,
+            triggerSignboard: detour.triggerSignboard,
+            polyline: routePolyline,
+            waypoints: wp.waypoints,
+          });
+        }
+        flash("✅ Successfully saved to Supabase!", 5000);
+        await data.refresh();
+      } catch (e) {
+        setStatus("");
+        alert(e.message);
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -417,6 +483,7 @@ export function useDigitizer() {
       onRemove: removeWaypoint,
       onReorder: wp.reorder,
       onSaveAsNew: saveStopAsNew,
+      onSaveChanges: saveStopChanges,
       onReplace: replaceStopWithExisting,
     },
 
@@ -434,6 +501,7 @@ export function useDigitizer() {
       onUpdate: wp.update,
       onRemove: removeWaypoint,
       onSaveAsNew: saveStopAsNew,
+      onSaveChanges: saveStopChanges,
       onClose: () => setPopupInfo(null),
     },
   };

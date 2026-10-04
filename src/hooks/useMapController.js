@@ -154,5 +154,20 @@ export function useMapController({
     mapRef.current?.flyTo({ center, zoom });
   }, []);
 
-  return { containerRef, setRouteLine, flyTo };
+  const fitBounds = useCallback((coordinates) => {
+    const map = mapRef.current;
+    if (!map || !coordinates || coordinates.length === 0) return;
+    const bounds = coordinates.reduce(
+      (b, coord) => [
+        Math.min(b[0], coord[0]),
+        Math.min(b[1], coord[1]),
+        Math.max(b[2], coord[0]),
+        Math.max(b[3], coord[1]),
+      ],
+      [Infinity, Infinity, -Infinity, -Infinity],
+    );
+    map.fitBounds(bounds, { padding: 60, maxZoom: 18, duration: 1000 });
+  }, []);
+
+  return { containerRef, setRouteLine, flyTo, fitBounds };
 }

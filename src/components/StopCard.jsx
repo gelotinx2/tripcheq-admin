@@ -24,8 +24,6 @@ function Chip({ className, children }) {
   );
 }
 
-// One stop in the list. Folded it shows a single row; unfolded it shows the
-// editable fields.
 export default function StopCard({
   index,
   waypoint: w,
@@ -36,10 +34,12 @@ export default function StopCard({
   onUpdate,
   onRemove,
   onSaveAsNew,
+  onSaveChanges,
   onReplace,
   dragProps,
 }) {
   const [replacing, setReplacing] = useState(false);
+  const [isOver, setIsOver] = useState(false);
   const isStop = w.type === "stop";
   const title = isStop ? w.name || "Unnamed stop" : "Connector node";
   const subtitle = isStop
@@ -51,14 +51,24 @@ export default function StopCard({
   return (
     <li
       id={`waypoint-${w.id}`}
-      {...dragProps}
-      className={`border-b border-slate-200 border-l-4 bg-white transition-colors ${
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsOver(true);
+      }}
+      onDragLeave={() => setIsOver(false)}
+      onDrop={(e) => {
+        setIsOver(false);
+        dragProps.onDrop(e);
+      }}
+      className={`border-b border-slate-200 border-l-4 bg-white transition-all ${
         selected ? "border-l-blue-500 bg-blue-50/60" : "border-l-transparent"
-      }`}
+      } ${isOver ? "border-t-2 border-t-blue-500 bg-blue-50/40" : ""}`}
     >
       <div className="flex items-center gap-1 pr-2">
         <span
-          className="cursor-grab select-none pl-2 text-lg leading-none text-slate-300 hover:text-slate-500"
+          draggable
+          onDragStart={dragProps.onDragStart}
+          className="cursor-grab select-none pl-2 text-lg leading-none text-slate-300 hover:text-slate-500 active:cursor-grabbing"
           title="Drag to reorder"
           aria-hidden="true"
         >
@@ -111,7 +121,10 @@ export default function StopCard({
       </div>
 
       {expanded && (
-        <div className="space-y-2 px-3 pb-3 pl-12">
+        <div
+          className="space-y-2 px-3 pb-3 pl-12"
+          onMouseDown={(e) => e.stopPropagation()} // Prevents drag clash inside input fields
+        >
           {isStop ? (
             <>
               <input
@@ -185,13 +198,22 @@ export default function StopCard({
               )}
 
               {w.isDirty && w.dbId && (
-                <button
-                  type="button"
-                  onClick={() => onSaveAsNew(w.id)}
-                  className="w-full rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
-                >
-                  💾 Save as new stop instead
-                </button>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => onSaveChanges(w.id)}
+                    className="flex-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    💾 Save changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSaveAsNew(w.id)}
+                    className="flex-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    ✨ Save as new
+                  </button>
+                </div>
               )}
             </>
           ) : (

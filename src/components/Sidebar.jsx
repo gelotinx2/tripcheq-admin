@@ -33,7 +33,7 @@ export default function Sidebar({ d }) {
     <aside className="z-10 flex h-full w-[520px] shrink-0 flex-col border-r border-slate-200 bg-slate-50 shadow-xl">
       <header className="shrink-0 space-y-3 border-b border-slate-200 bg-white px-4 pb-3 pt-4">
         <h1 className="m-0 text-lg font-bold text-slate-800">
-          Pasada admin dashboard
+          TripCheq Admin Dashboard
         </h1>
         <ModeSwitcher mode={d.mappingMode} onChange={d.switchMode} />
       </header>
