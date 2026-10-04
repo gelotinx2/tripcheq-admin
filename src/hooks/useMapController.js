@@ -166,12 +166,19 @@ export function useMapController({
     waypoints.forEach((w, i) => {
       let marker = markersRef.current[String(w.id)];
       if (!marker) {
+        // Distinct styling for anchors to indicate they are locked
+        const isAnchor = w.isAnchor;
         const el = document.createElement("div");
-        el.className = `flex items-center justify-center w-6 h-6 rounded-full border-2 border-white text-white font-bold text-xs cursor-pointer shadow-md select-none ${
-          w.type === "stop" ? "bg-red-500" : "bg-gray-400"
+        el.className = `flex items-center justify-center w-6 h-6 rounded-full border-2 border-white text-white font-bold text-xs shadow-md select-none ${
+          isAnchor
+            ? "bg-violet-600 opacity-80"
+            : w.type === "stop"
+              ? "bg-red-500 cursor-pointer"
+              : "bg-gray-400 cursor-pointer"
         }`;
 
-        marker = new Marker({ element: el, draggable: true })
+        // Only make draggable if it's NOT an anchor
+        marker = new Marker({ element: el, draggable: !isAnchor })
           .setLngLat([w.lng, w.lat])
           .addTo(map);
 

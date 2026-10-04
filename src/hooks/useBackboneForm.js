@@ -8,6 +8,9 @@ export function useBackboneForm() {
   const [direction, setDirection] = useState("OUTBOUND");
   const [selectedEditId, setSelectedEditId] = useState("");
 
+  // New state for Variant / Backbone Name
+  const [backboneName, setBackboneName] = useState("");
+
   // Auto-generated inbound draft (reverse of an existing outbound)
   const [inboundDraftAvailable, setInboundDraftAvailable] = useState(false);
   const [cachedOutboundBb, setCachedOutboundBb] = useState(null);
@@ -23,6 +26,8 @@ export function useBackboneForm() {
     setDirection,
     selectedEditId,
     setSelectedEditId,
+    backboneName,
+    setBackboneName,
     inboundDraftAvailable,
     setInboundDraftAvailable,
     cachedOutboundBb,

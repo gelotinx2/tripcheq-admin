@@ -26,9 +26,11 @@ export default function DetourConfig({ d }) {
             className={inputCls}
             value={d.splitStopId}
             onChange={(e) => d.setSplitStopId(e.target.value)}
+            disabled={!d.backboneId || d.backboneStops.length === 0}
           >
             {d.backboneStops.map((s) => (
               <option key={`split-${s.stop_id}`} value={s.stop_id}>
+                {s.route_order ? `${s.route_order}. ` : ""}
                 {s.transit_stops.name}
               </option>
             ))}
@@ -40,12 +42,19 @@ export default function DetourConfig({ d }) {
             className={inputCls}
             value={d.mergeStopId}
             onChange={(e) => d.setMergeStopId(e.target.value)}
+            disabled={
+              !d.splitStopId ||
+              !d.availableMergeStops ||
+              d.availableMergeStops.length === 0
+            }
           >
-            {d.backboneStops.map((s) => (
-              <option key={`merge-${s.stop_id}`} value={s.stop_id}>
-                {s.transit_stops.name}
-              </option>
-            ))}
+            {d.availableMergeStops &&
+              d.availableMergeStops.map((s) => (
+                <option key={`merge-${s.stop_id}`} value={s.stop_id}>
+                  {s.route_order ? `${s.route_order}. ` : ""}
+                  {s.transit_stops.name}
+                </option>
+              ))}
           </select>
         </div>
       </div>

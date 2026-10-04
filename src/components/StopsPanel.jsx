@@ -14,6 +14,22 @@ export default function StopsPanel({ mappingMode, stops }) {
   const { waypoints, selectedId, disabled } = stops;
   const [expanded, setExpanded] = useState(() => new Set());
 
+  const getRenderIndex = (index, w) => {
+    if (
+      mappingMode === "DETOUR" &&
+      waypoints.length >= 2 &&
+      waypoints[0].isSplitAnchor
+    ) {
+      const startIdx = (Number(waypoints[0].backboneIndex) || 1) - 1;
+
+      if (w.isSplitAnchor) return startIdx;
+      if (w.isMergeAnchor) return startIdx + (waypoints.length - 1);
+
+      return startIdx + index;
+    }
+    return index;
+  };
+
   useEffect(() => {
     if (selectedId == null) return;
     setExpanded((prev) => new Set(prev).add(selectedId));
@@ -118,23 +134,27 @@ export default function StopsPanel({ mappingMode, stops }) {
         {waypoints.map((w, i) => (
           <StopCard
             key={w.id}
-            index={i}
+            index={getRenderIndex(i, w)}
             waypoint={w}
             selected={selectedId === w.id}
             expanded={expanded.has(w.id)}
             onToggle={() => toggle(w.id)}
             globalStops={stops.globalStops}
-            onUpdate={stops.onUpdate}
-            onRemove={stops.onRemove}
-            onSaveAsNew={stops.onSaveAsNew}
-            onSaveChanges={stops.onSaveChanges}
-            onReplace={stops.onReplace}
-            dragProps={{
-              draggable: true,
-              onDragStart: (e) => handleDragStart(e, i),
-              onDragOver: (e) => e.preventDefault(),
-              onDrop: (e) => handleDrop(e, i),
-            }}
+            onUpdate={w.isAnchor ? () => {} : stops.onUpdate}
+            onRemove={w.isAnchor ? () => {} : stops.onRemove}
+            onSaveAsNew={w.isAnchor ? () => {} : stops.onSaveAsNew}
+            onSaveChanges={w.isAnchor ? () => {} : stops.onSaveChanges}
+            onReplace={w.isAnchor ? () => {} : stops.onReplace}
+            dragProps={
+              w.isAnchor
+                ? {}
+                : {
+                    draggable: true,
+                    onDragStart: (e) => handleDragStart(e, i),
+                    onDragOver: (e) => e.preventDefault(),
+                    onDrop: (e) => handleDrop(e, i),
+                  }
+            }
           />
         ))}
       </ul>

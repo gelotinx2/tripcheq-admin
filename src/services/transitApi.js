@@ -13,7 +13,7 @@ export async function fetchAllTransitData() {
     supabase
       .from("route_backbones")
       .select(
-        `id, direction, encoded_polyline, transit_routes (id, name, transit_mode)`,
+        `id, name, direction, encoded_polyline, transit_routes (id, name, transit_mode)`,
       ),
     supabase.from("transit_stops").select("*").order("name"),
   ]);
@@ -135,6 +135,7 @@ export async function saveBackbone({
   routeSelect,
   newRouteName,
   newRouteMode,
+  backboneName,
   direction,
   polyline,
   editId,
@@ -155,7 +156,12 @@ export async function saveBackbone({
   if (editId) {
     const { data, error } = await supabase
       .from("route_backbones")
-      .update({ direction, encoded_polyline: polyline })
+      // Save name here
+      .update({
+        direction,
+        name: backboneName || null,
+        encoded_polyline: polyline,
+      })
       .eq("id", editId)
       .select()
       .single();
@@ -168,7 +174,12 @@ export async function saveBackbone({
   } else {
     const { data, error } = await supabase
       .from("route_backbones")
-      .insert({ route_id: routeId, direction, encoded_polyline: polyline })
+      .insert({
+        route_id: routeId,
+        name: backboneName || null,
+        direction,
+        encoded_polyline: polyline,
+      })
       .select()
       .single();
     if (error) throw new Error("Backbone Insert Error: " + error.message);

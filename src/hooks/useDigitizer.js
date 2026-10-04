@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { decodePolyline, encodePolyline } from "../lib/Polyline";
 import {
   blankWaypoint,
@@ -46,17 +46,46 @@ export function useDigitizer({ darkMode } = {}) {
     popupContainer,
     darkMode,
     onMapClick: ({ lng, lat }) => {
-      if (!bb.routeSelect && mappingMode === "BACKBONE") {
+      if (mappingMode === "BACKBONE" && !bb.routeSelect) {
         alert("Please select or create a Master Route first!");
         return;
       }
+      if (
+        mappingMode === "DETOUR" &&
+        (!detour.splitStopId || !detour.mergeStopId)
+      ) {
+        alert(
+          "Please select the Split and Merge stops before drawing the detour.",
+        );
+        return;
+      }
+
       const id = wp.nextId();
-      wp.apply((prev) => [...prev, blankWaypoint(id, lng, lat, nodeType)]);
+
+      if (mappingMode === "DETOUR") {
+        // Insert logic: add the new node right before the merge anchor
+        wp.apply((prev) => {
+          const mergeIdx = prev.findIndex((p) => p.isMergeAnchor);
+          if (mergeIdx === -1)
+            return [...prev, blankWaypoint(id, lng, lat, nodeType)]; // fallback
+
+          const next = [...prev];
+          next.splice(mergeIdx, 0, blankWaypoint(id, lng, lat, nodeType));
+          return next;
+        });
+      } else {
+        wp.apply((prev) => [...prev, blankWaypoint(id, lng, lat, nodeType)]);
+      }
       setPopupInfo({ id, lng, lat });
     },
     onMarkerDragEnd: (id, lng, lat) => {
+      const w = wp.waypoints.find((p) => p.id === id);
+      if (w && w.isAnchor) return; // Disallow dragging anchor nodes
+
       wp.apply((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, lng, lat, isDirty: true } : p)),
+        prev.map((p) =>
+          p.id === id && !p.isAnchor ? { ...p, lng, lat, isDirty: true } : p,
+        ),
       );
       setPopupInfo((prev) =>
         prev && prev.id === id ? { ...prev, lng, lat } : prev,
@@ -97,9 +126,74 @@ export function useDigitizer({ darkMode } = {}) {
 
   // ---------- MODE / ROUTE / DIRECTION ----------
   const switchMode = (mode) => {
+    // Save current backbone context before switching
+    const currentPolyline = routePolyline;
     setMappingMode(mode);
-    clearMapData();
+
+    if (mode === "BACKBONE") {
+      // Return to full backbone editing
+      bb.setSelectedEditId("");
+    } else if (mode === "DETOUR") {
+      // Entering Detour mode: DO NOT clear the map.
+      // Keep the backbone line visible as context, but clear the waypoints
+      // so the user only edits the detour segment.
+      wp.apply(() => []);
+
+      // Auto-set the backbone config to the currently loaded backbone
+      if (bb.selectedEditId) {
+        detour.setBackboneId(bb.selectedEditId);
+      }
+    }
   };
+
+  // Watch detour split/merge selections and inject them as anchors
+  useEffect(() => {
+    if (
+      mappingMode === "DETOUR" &&
+      detour.splitStopId &&
+      detour.mergeStopId &&
+      detour.backboneStops.length > 0
+    ) {
+      // Pull full stop geometry from data.stops to guarantee valid coordinates
+      const splitStop = data.stops.find((s) => s.id === detour.splitStopId);
+      const mergeStop = data.stops.find((s) => s.id === detour.mergeStopId);
+
+      // Dynamically calculate the index position instead of guessing the database column
+      const splitOrder =
+        detour.backboneStops.findIndex(
+          (s) => s.stop_id === detour.splitStopId,
+        ) + 1;
+      const mergeOrder =
+        detour.backboneStops.findIndex(
+          (s) => s.stop_id === detour.mergeStopId,
+        ) + 1;
+
+      if (splitStop && mergeStop) {
+        wp.apply(() => [
+          {
+            ...globalStopToWaypoint(splitStop, wp.nextId()),
+            isAnchor: true,
+            isSplitAnchor: true,
+            backboneIndex: splitOrder > 0 ? splitOrder : 1,
+          },
+          {
+            ...globalStopToWaypoint(mergeStop, wp.nextId()),
+            isAnchor: true,
+            isMergeAnchor: true,
+            backboneIndex: mergeOrder > 0 ? mergeOrder : 2,
+          },
+        ]);
+
+        // Auto-center the map on the split node to help the user start drawing
+        map.flyTo([splitStop.longitude, splitStop.latitude], 15);
+      }
+    }
+  }, [
+    mappingMode,
+    detour.splitStopId,
+    detour.mergeStopId,
+    detour.backboneStops,
+  ]);
 
   const changeRoute = (routeId) => {
     bb.setRouteSelect(routeId);
@@ -144,6 +238,7 @@ export function useDigitizer({ darkMode } = {}) {
 
     bb.setRouteSelect(found.transit_routes.id);
     bb.setDirection(found.direction);
+    bb.setBackboneName(found.name || "");
     setRoutePolyline(found.encoded_polyline);
     bb.setInboundDraftAvailable(false);
 
@@ -388,6 +483,7 @@ export function useDigitizer({ darkMode } = {}) {
             routeSelect: bb.routeSelect,
             newRouteName: bb.newRouteName,
             newRouteMode: bb.newRouteMode,
+            backboneName: bb.backboneName,
             direction: bb.direction,
             polyline: routePolyline,
             editId: bb.selectedEditId,
@@ -469,6 +565,7 @@ export function useDigitizer({ darkMode } = {}) {
       backboneId: detour.backboneId,
       setBackboneId: detour.setBackboneId,
       backboneStops: detour.backboneStops,
+      availableMergeStops: detour.availableMergeStops,
       splitStopId: detour.splitStopId,
       setSplitStopId: detour.setSplitStopId,
       mergeStopId: detour.mergeStopId,

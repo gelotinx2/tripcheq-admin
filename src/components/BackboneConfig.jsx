@@ -110,23 +110,36 @@ export default function BackboneConfig({ b }) {
             </option>
             {b.backbones.map((bb) => (
               <option key={`edit-bb-${bb.id}`} value={bb.id}>
-                {bb.direction} backbone (
-                {bb.encoded_polyline ? "has polyline" : "no polyline"})
+                {bb.name
+                  ? `${bb.name} (${bb.direction})`
+                  : `Default (${bb.direction})`}
               </option>
             ))}
           </select>
         </div>
 
-        <div>
-          <label className={labelCls}>Direction</label>
-          <select
-            className={inputCls}
-            value={b.direction}
-            onChange={(e) => b.onDirectionChange(e.target.value)}
-          >
-            <option value="OUTBOUND">Outbound (forward)</option>
-            <option value="INBOUND">Inbound (vice versa / return)</option>
-          </select>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className={labelCls}>Direction</label>
+            <select
+              className={inputCls}
+              value={b.direction}
+              onChange={(e) => b.onDirectionChange(e.target.value)}
+            >
+              <option value="OUTBOUND">Outbound</option>
+              <option value="INBOUND">Inbound</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className={labelCls}>Variant Name (Optional)</label>
+            <input
+              className={inputCls}
+              type="text"
+              placeholder="e.g. via SLEX (Leave blank for default)"
+              value={b.backboneName}
+              onChange={(e) => b.setBackboneName(e.target.value)}
+            />
+          </div>
         </div>
       </div>
     </div>
