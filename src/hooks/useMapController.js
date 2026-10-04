@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Map as MapLibreMap, Marker, Popup } from "maplibre-gl";
+import {
+  Map as MapLibreMap,
+  Marker,
+  Popup,
+  NavigationControl,
+} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
   EMPTY_LINE,
-  MAP_STYLE_URL,
+  MAP_STYLE_DARK,
+  MAP_STYLE_LIGHT,
 } from "../lib/constants";
 
-// Owns the MapLibre instance, the numbered markers and the edit popup.
-// It reports user actions through callbacks and holds no app state itself.
 export function useMapController({
   waypoints,
   popupInfo,
   popupContainer,
+  darkMode,
   onMapClick,
   onMarkerDragEnd,
   onMarkerClick,
@@ -24,8 +29,15 @@ export function useMapController({
   const markersRef = useRef({});
   const popupRef = useRef(null);
   const handlersRef = useRef({});
+  const currentCoordsRef = useRef([]);
 
-  // Always point at the latest callbacks without re-registering map events
+  // 1. Create a ref for darkMode so the persistent event listener inside
+  // the map initialization block always has the absolute latest theme value.
+  const darkModeRef = useRef(darkMode);
+  useEffect(() => {
+    darkModeRef.current = darkMode;
+  }, [darkMode]);
+
   useEffect(() => {
     handlersRef.current = {
       onMapClick,
@@ -35,41 +47,108 @@ export function useMapController({
     };
   });
 
+  const remove3DBuildings = (map) => {
+    const style = map.getStyle();
+    if (!style || !style.layers) return;
+    style.layers.forEach((layer) => {
+      if (layer.id.includes("building") || layer.type === "fill-extrusion") {
+        if (map.getLayer(layer.id)) {
+          map.setLayoutProperty(layer.id, "visibility", "none");
+        }
+      }
+    });
+  };
+
+  const ensureRouteLayer = (map, coordinates, isDark) => {
+    const data =
+      coordinates && coordinates.length > 0
+        ? {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates },
+          }
+        : EMPTY_LINE;
+
+    const source = map.getSource("route");
+
+    if (!source) {
+      map.addSource("route", { type: "geojson", data });
+    } else {
+      source.setData(data);
+    }
+
+    if (!map.getLayer("route")) {
+      map.addLayer({
+        id: "route",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": isDark ? "#22d3ee" : "#3b82f6",
+          "line-width": isDark ? 7 : 6,
+        },
+      });
+    } else {
+      map.setPaintProperty(
+        "route",
+        "line-color",
+        isDark ? "#22d3ee" : "#3b82f6",
+      );
+      map.setPaintProperty("route", "line-width", isDark ? 7 : 6);
+    }
+  };
+
   // --- create the map once ---
   useEffect(() => {
     if (mapRef.current) return;
 
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: MAP_STYLE_URL,
+      style: darkModeRef.current ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       doubleClickZoom: false,
     });
     mapRef.current = map;
 
+    map.addControl(
+      new NavigationControl({ visualizePitch: false }),
+      "top-right",
+    );
+
     map.on("error", (e) => console.error("MapLibre error:", e.error));
 
-    // MapTiler's style references an icon that isn't in its sprite;
-    // register a transparent 1x1 image so MapLibre stops warning about it.
     map.on("styleimagemissing", (e) => {
       if (map.hasImage(e.id)) return;
       map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
 
-    map.on("load", () => {
-      map.addSource("route", { type: "geojson", data: EMPTY_LINE });
-      map.addLayer({
-        id: "route",
-        type: "line",
-        source: "route",
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#3b82f6", "line-width": 6 },
-      });
+    // 2. The Bulletproof Fix: A permanent styledata listener.
+    // This continuously monitors the map. Whenever the map finishes painting ANY style
+    // changes (including a full setStyle wipe), it heals the map by re-adding the polyline.
+    map.on("styledata", () => {
+      if (map.isStyleLoaded()) {
+        remove3DBuildings(map);
+        ensureRouteLayer(map, currentCoordsRef.current, darkModeRef.current);
+      }
     });
 
     map.on("click", (e) => handlersRef.current.onMapClick?.(e.lngLat));
   }, []);
+
+  // --- dynamically switch map style when darkMode changes ---
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // 3. We ONLY need to call setStyle here. The persistent "styledata" listener
+    // established above will automatically detect this, wait for the style to load,
+    // and correctly inject currentCoordsRef.current back onto the map.
+    map.setStyle(darkMode ? MAP_STYLE_DARK : MAP_STYLE_LIGHT);
+  }, [darkMode]);
 
   // --- keep markers in sync with the waypoint list ---
   useEffect(() => {
@@ -135,19 +214,11 @@ export function useMapController({
     }
   }, [popupInfo, popupContainer]);
 
-  // Draw a line, or clear it when given null/empty coordinates
   const setRouteLine = useCallback((coordinates) => {
-    const source = mapRef.current?.getSource("route");
-    if (!source) return;
-    source.setData(
-      coordinates && coordinates.length
-        ? {
-            type: "Feature",
-            properties: {},
-            geometry: { type: "LineString", coordinates },
-          }
-        : EMPTY_LINE,
-    );
+    currentCoordsRef.current = coordinates || [];
+    const map = mapRef.current;
+    if (!map) return;
+    ensureRouteLayer(map, currentCoordsRef.current, darkModeRef.current);
   }, []);
 
   const flyTo = useCallback((center, zoom) => {

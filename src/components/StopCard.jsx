@@ -5,12 +5,20 @@ import { inputCls } from "../lib/Styles";
 function StatusChip({ waypoint: w }) {
   if (w.type !== "stop") return null;
   if (!w.dbId) {
-    return <Chip className="bg-blue-100 text-blue-700">New</Chip>;
+    return (
+      <Chip className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+        New
+      </Chip>
+    );
   }
   return w.isDirty ? (
-    <Chip className="bg-amber-100 text-amber-700">Unsaved changes</Chip>
+    <Chip className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+      Unsaved changes
+    </Chip>
   ) : (
-    <Chip className="bg-emerald-100 text-emerald-700">Linked</Chip>
+    <Chip className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+      Linked
+    </Chip>
   );
 }
 
@@ -60,15 +68,17 @@ export default function StopCard({
         setIsOver(false);
         dragProps.onDrop(e);
       }}
-      className={`border-b border-slate-200 border-l-4 bg-white transition-all ${
-        selected ? "border-l-blue-500 bg-blue-50/60" : "border-l-transparent"
-      } ${isOver ? "border-t-2 border-t-blue-500 bg-blue-50/40" : ""}`}
+      className={`border-b border-slate-200 dark:border-slate-800 border-l-4 bg-white dark:bg-slate-900 transition-all ${
+        selected
+          ? "border-l-blue-500 bg-blue-50/60 dark:bg-blue-950/40"
+          : "border-l-transparent"
+      } ${isOver ? "border-t-2 border-t-blue-500 bg-blue-50/40 dark:bg-slate-800" : ""}`}
     >
       <div className="flex items-center gap-1 pr-2">
         <span
           draggable
           onDragStart={dragProps.onDragStart}
-          className="cursor-grab select-none pl-2 text-lg leading-none text-slate-300 hover:text-slate-500 active:cursor-grabbing"
+          className="cursor-grab select-none pl-2 text-lg leading-none text-slate-300 dark:text-slate-600 hover:text-slate-500 active:cursor-grabbing"
           title="Drag to reorder"
           aria-hidden="true"
         >
@@ -90,13 +100,15 @@ export default function StopCard({
           <span className="min-w-0 flex-1">
             <span
               className={`block truncate text-sm font-semibold ${
-                isStop && !w.name ? "text-slate-400" : "text-slate-800"
+                isStop && !w.name
+                  ? "text-slate-400"
+                  : "text-slate-800 dark:text-slate-200"
               }`}
             >
               {title}
             </span>
             {subtitle && (
-              <span className="block truncate text-xs text-slate-500">
+              <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
                 {subtitle}
               </span>
             )}
@@ -114,7 +126,7 @@ export default function StopCard({
           onClick={() => onRemove(w.id)}
           title="Remove point"
           aria-label={`Remove point ${index + 1}`}
-          className="shrink-0 rounded px-1.5 py-1 text-sm text-red-400 hover:bg-red-50 hover:text-red-600"
+          className="shrink-0 rounded px-1.5 py-1 text-sm text-red-400 hover:bg-red-50 dark:hover:bg-slate-800 hover:text-red-600"
         >
           🗑
         </button>
@@ -123,7 +135,7 @@ export default function StopCard({
       {expanded && (
         <div
           className="space-y-2 px-3 pb-3 pl-12"
-          onMouseDown={(e) => e.stopPropagation()} // Prevents drag clash inside input fields
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {isStop ? (
             <>
@@ -163,7 +175,7 @@ export default function StopCard({
               </div>
 
               {replacing ? (
-                <div className="space-y-1.5 rounded-md border border-slate-300 bg-slate-100 p-2">
+                <div className="space-y-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 p-2">
                   <select
                     className={inputCls}
                     defaultValue=""
@@ -182,7 +194,7 @@ export default function StopCard({
                   <button
                     type="button"
                     onClick={() => setReplacing(false)}
-                    className="block w-full text-center text-[11px] text-slate-500 underline hover:text-slate-700"
+                    className="block w-full text-center text-[11px] text-slate-500 dark:text-slate-400 underline hover:text-slate-700"
                   >
                     Cancel
                   </button>
@@ -191,7 +203,7 @@ export default function StopCard({
                 <button
                   type="button"
                   onClick={() => setReplacing(true)}
-                  className="text-left text-xs font-semibold text-blue-600 hover:text-blue-800"
+                  className="text-left text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800"
                 >
                   🔄 Replace with existing database stop
                 </button>
@@ -202,14 +214,14 @@ export default function StopCard({
                   <button
                     type="button"
                     onClick={() => onSaveChanges(w.id)}
-                    className="flex-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                    className="flex-1 rounded border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100"
                   >
                     💾 Save changes
                   </button>
                   <button
                     type="button"
                     onClick={() => onSaveAsNew(w.id)}
-                    className="flex-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                    className="flex-1 rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100"
                   >
                     ✨ Save as new
                   </button>
@@ -217,7 +229,7 @@ export default function StopCard({
               )}
             </>
           ) : (
-            <p className="text-xs italic text-slate-500">
+            <p className="text-xs italic text-slate-500 dark:text-slate-400">
               Connector nodes only bend the line. They have no properties and
               are not saved as stops.
             </p>

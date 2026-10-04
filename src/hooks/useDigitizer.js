@@ -25,7 +25,7 @@ import { useWaypoints } from "./useWaypoints";
 
 // Ties the data, map and form hooks together and holds the workflows
 // (load, reverse, snap, save, delete). Components only read what it returns.
-export function useDigitizer() {
+export function useDigitizer({ darkMode } = {}) {
   const [isSaving, setIsSaving] = useState(false);
   const [mappingMode, setMappingMode] = useState("BACKBONE");
   const [nodeType, setNodeType] = useState("stop");
@@ -44,6 +44,7 @@ export function useDigitizer() {
     waypoints: wp.waypoints,
     popupInfo,
     popupContainer,
+    darkMode,
     onMapClick: ({ lng, lat }) => {
       if (!bb.routeSelect && mappingMode === "BACKBONE") {
         alert("Please select or create a Master Route first!");
@@ -74,6 +75,13 @@ export function useDigitizer() {
     bb.setCachedOutboundBb(null);
     map.setRouteLine(null);
     setPopupInfo(null);
+  };
+
+  const refreshRouteView = () => {
+    if (routePolyline) {
+      const decodedCoords = decodePolyline(routePolyline);
+      map.setRouteLine(decodedCoords);
+    }
   };
 
   const undo = () => {
@@ -493,6 +501,8 @@ export function useDigitizer() {
       canUndo: wp.canUndo,
       clear: clearMapData,
       save,
+      redraw: refreshRouteView,
+      loadBackbone,
     },
 
     popup: {

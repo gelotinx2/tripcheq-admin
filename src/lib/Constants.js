@@ -1,7 +1,8 @@
 export const MAPBOX_KEY = import.meta.env.VITE_MAPBOX_KEY;
 export const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY;
 
-export const MAP_STYLE_URL = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
+export const MAP_STYLE_LIGHT = `https://api.maptiler.com/maps/streets-v2/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`;
+export const MAP_STYLE_DARK = `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`;
 export const DEFAULT_CENTER = [121.0, 14.425];
 export const DEFAULT_ZOOM = 13;
 

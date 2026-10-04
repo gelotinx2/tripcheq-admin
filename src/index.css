@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4 manual dark mode variant binding */
+@variant dark (&:where(.dark, .dark *));
+
 html,
 body,
 #root {
@@ -21,4 +24,8 @@ body,
 }
 .maplibregl-popup-content {
   @apply p-3 rounded-lg shadow-lg;
+}
+
+.maplibregl-popup-content {
+  @apply p-3 rounded-lg shadow-lg bg-white dark:bg-slate-800 dark:text-slate-200 border border-transparent dark:border-slate-700;
 }

@@ -10,12 +10,10 @@ function emptyMessage(mappingMode, disabled) {
   return "Click the map to draw only the detour stops between split and merge.";
 }
 
-// The stop list. It takes all the vertical space the sidebar has left.
 export default function StopsPanel({ mappingMode, stops }) {
   const { waypoints, selectedId, disabled } = stops;
   const [expanded, setExpanded] = useState(() => new Set());
 
-  // Selecting a point on the map opens its card and scrolls it into view
   useEffect(() => {
     if (selectedId == null) return;
     setExpanded((prev) => new Set(prev).add(selectedId));
@@ -51,13 +49,13 @@ export default function StopsPanel({ mappingMode, stops }) {
 
   return (
     <section
-      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-opacity ${
         disabled ? "pointer-events-none opacity-50" : ""
       }`}
     >
-      <div className="shrink-0 space-y-2 border-b border-slate-200 bg-slate-50 p-3">
+      <div className="shrink-0 space-y-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-slate-800">
+          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
             Stops{" "}
             <span className="font-semibold text-slate-400">
               ({waypoints.length})
@@ -69,14 +67,14 @@ export default function StopsPanel({ mappingMode, stops }) {
           <button
             type="button"
             onClick={() => setExpanded(new Set(waypoints.map((w) => w.id)))}
-            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
+            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800"
           >
             Expand all
           </button>
           <button
             type="button"
             onClick={() => setExpanded(new Set())}
-            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
+            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800"
           >
             Collapse all
           </button>
@@ -93,7 +91,7 @@ export default function StopsPanel({ mappingMode, stops }) {
             <option value="connector">🔗 Map click adds a connector</option>
           </select>
           <select
-            className={`${inputCls} flex-1 border-emerald-300 bg-emerald-50 font-semibold text-emerald-700`}
+            className={`${inputCls} flex-1 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 font-semibold text-emerald-700 dark:text-emerald-300`}
             defaultValue=""
             onChange={(e) => {
               stops.onAddExisting(e.target.value);

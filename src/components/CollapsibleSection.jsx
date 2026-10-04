@@ -1,10 +1,11 @@
 const ACCENTS = {
-  blue: { border: "border-blue-200", dot: "bg-blue-500" },
-  violet: { border: "border-violet-200", dot: "bg-violet-500" },
+  blue: { border: "border-blue-200 dark:border-blue-900", dot: "bg-blue-500" },
+  violet: {
+    border: "border-violet-200 dark:border-violet-900",
+    dot: "bg-violet-500",
+  },
 };
 
-// A titled panel that folds away. While folded, `summary` shows a short
-// reminder of what is configured inside.
 export default function CollapsibleSection({
   title,
   summary,
@@ -16,18 +17,20 @@ export default function CollapsibleSection({
   const a = ACCENTS[accent];
   return (
     <section
-      className={`mb-3 shrink-0 overflow-hidden rounded-lg border bg-white shadow-sm ${a.border}`}
+      className={`mb-3 shrink-0 overflow-hidden rounded-lg border bg-white dark:bg-slate-900 shadow-sm transition-colors ${a.border} dark:border-slate-800`}
     >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 transition-colors"
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${a.dot}`} />
-        <span className="text-sm font-bold text-slate-800">{title}</span>
+        <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+          {title}
+        </span>
         {!open && summary && (
-          <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+          <span className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400">
             {summary}
           </span>
         )}
@@ -39,7 +42,7 @@ export default function CollapsibleSection({
         </span>
       </button>
       {open && (
-        <div className="max-h-[40vh] overflow-y-auto border-t border-slate-100 p-3">
+        <div className="max-h-[40vh] overflow-y-auto border-t border-slate-100 dark:border-slate-800 p-3">
           {children}
         </div>
       )}
