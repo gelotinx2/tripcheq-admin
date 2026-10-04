@@ -103,6 +103,7 @@ export function useDigitizer({ darkMode } = {}) {
     bb.setInboundDraftAvailable(false);
     bb.setCachedOutboundBb(null);
     map.setRouteLine(null);
+    map.setBaseRouteLine(null);
     setPopupInfo(null);
   };
 
@@ -123,6 +124,26 @@ export function useDigitizer({ darkMode } = {}) {
     wp.remove(id);
     setPopupInfo((prev) => (prev && prev.id === id ? null : prev));
   };
+
+  function getSquaredDistance(coord1, coord2) {
+    const dx = coord1[0] - coord2[0];
+    const dy = coord1[1] - coord2[1];
+    return dx * dx + dy * dy;
+  }
+
+  function findClosestIndex(coords, targetLngLat) {
+    if (!coords || coords.length === 0) return -1;
+    let minIdx = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < coords.length; i++) {
+      const dist = getSquaredDistance(coords[i], targetLngLat);
+      if (dist < minDist) {
+        minDist = dist;
+        minIdx = i;
+      }
+    }
+    return minIdx;
+  }
 
   // ---------- MODE / ROUTE / DIRECTION ----------
   const switchMode = (mode) => {
@@ -193,6 +214,68 @@ export function useDigitizer({ darkMode } = {}) {
     detour.splitStopId,
     detour.mergeStopId,
     detour.backboneStops,
+  ]);
+
+  // Watch detour backbone changes to load its polyline for visual context
+  useEffect(() => {
+    if (mappingMode === "DETOUR") {
+      if (!detour.backboneId) {
+        map.setBaseRouteLine(null);
+        return;
+      }
+
+      const found = data.backbones.find((b) => b.id === detour.backboneId);
+      if (!found || !found.encoded_polyline) {
+        map.setBaseRouteLine(null);
+        return;
+      }
+
+      const coords = decodePolyline(found.encoded_polyline);
+
+      if (detour.splitStopId && detour.mergeStopId) {
+        const splitStop = data.stops.find((s) => s.id === detour.splitStopId);
+        const mergeStop = data.stops.find((s) => s.id === detour.mergeStopId);
+
+        if (splitStop && mergeStop) {
+          const splitIdx = findClosestIndex(coords, [
+            splitStop.longitude,
+            splitStop.latitude,
+          ]);
+          const mergeIdx = findClosestIndex(coords, [
+            mergeStop.longitude,
+            mergeStop.latitude,
+          ]);
+
+          if (splitIdx !== -1 && mergeIdx !== -1) {
+            const startIdx = Math.min(splitIdx, mergeIdx);
+            const endIdx = Math.max(splitIdx, mergeIdx);
+            const segment1 = coords.slice(0, startIdx + 1);
+            const segment2 = coords.slice(endIdx);
+
+            map.setBaseRouteLine({
+              type: "MultiLineString",
+              coordinates: [segment1, segment2],
+            });
+            return;
+          }
+        }
+      }
+
+      map.setBaseRouteLine({
+        type: "LineString",
+        coordinates: coords,
+      });
+    } else {
+      map.setBaseRouteLine(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mappingMode,
+    detour.backboneId,
+    detour.splitStopId,
+    detour.mergeStopId,
+    data.backbones,
+    data.stops,
   ]);
 
   const changeRoute = (routeId) => {
@@ -533,6 +616,17 @@ export function useDigitizer({ darkMode } = {}) {
     : null;
 
   const stopsDisabled = !bb.routeSelect && mappingMode === "BACKBONE";
+
+  useMemo(() => {
+    if (!routePolyline && wp.waypoints.length > 1) {
+      // For detours, we only want to connect the active segment,
+      // but drawing all waypoints is a safe visual approximation.
+      const coords = wp.waypoints.map((w) => [w.lng, w.lat]);
+      map.setRouteLine(coords);
+    } else if (!routePolyline && wp.waypoints.length <= 1) {
+      map.setRouteLine(null);
+    }
+  }, [wp.waypoints, routePolyline, map]);
 
   return {
     mapContainerRef: map.containerRef,

@@ -30,6 +30,7 @@ export function useMapController({
   const popupRef = useRef(null);
   const handlersRef = useRef({});
   const currentCoordsRef = useRef([]);
+  const baseGeometryRef = useRef(null);
 
   // 1. Create a ref for darkMode so the persistent event listener inside
   // the map initialization block always has the absolute latest theme value.
@@ -59,7 +60,77 @@ export function useMapController({
     });
   };
 
+  const ensureBaseRouteLayer = (map, geometry, isDark) => {
+    if (!map.isStyleLoaded()) return;
+
+    const data = geometry
+      ? {
+          type: "Feature",
+          properties: {},
+          geometry: geometry, // Can be LineString or MultiLineString
+        }
+      : EMPTY_LINE;
+
+    const source = map.getSource("base-route");
+
+    if (!source) {
+      map.addSource("base-route", { type: "geojson", data });
+    } else {
+      source.setData(data);
+    }
+
+    // LAYER 1: The solid Cyan/Blue base
+    if (!map.getLayer("base-route-bg")) {
+      map.addLayer({
+        id: "base-route-bg",
+        type: "line",
+        source: "base-route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": isDark ? "#22d3ee" : "#3b82f6", // Match main route cyan/blue
+          "line-width": isDark ? 7 : 6, // Match main route width
+        },
+      });
+    } else {
+      map.setPaintProperty(
+        "base-route-bg",
+        "line-color",
+        isDark ? "#22d3ee" : "#3b82f6",
+      );
+      map.setPaintProperty("base-route-bg", "line-width", isDark ? 7 : 6);
+    }
+
+    // LAYER 2: The dashed Grey line on top
+    if (!map.getLayer("base-route-fg")) {
+      map.addLayer({
+        id: "base-route-fg",
+        type: "line",
+        source: "base-route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": isDark ? "#475569" : "#94a3b8", // slate-600 / slate-400
+          "line-width": 4, // Thinner so the cyan shows underneath
+          "line-dasharray": [2, 2],
+        },
+      });
+    } else {
+      map.setPaintProperty(
+        "base-route-fg",
+        "line-color",
+        isDark ? "#475569" : "#94a3b8",
+      );
+    }
+  };
+
   const ensureRouteLayer = (map, coordinates, isDark) => {
+    if (!map.isStyleLoaded()) return;
+
     const data =
       coordinates && coordinates.length > 0
         ? {
@@ -126,12 +197,10 @@ export function useMapController({
       map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
 
-    // 2. The Bulletproof Fix: A permanent styledata listener.
-    // This continuously monitors the map. Whenever the map finishes painting ANY style
-    // changes (including a full setStyle wipe), it heals the map by re-adding the polyline.
     map.on("styledata", () => {
       if (map.isStyleLoaded()) {
         remove3DBuildings(map);
+        ensureBaseRouteLayer(map, baseGeometryRef.current, darkModeRef.current);
         ensureRouteLayer(map, currentCoordsRef.current, darkModeRef.current);
       }
     });
@@ -221,6 +290,13 @@ export function useMapController({
     }
   }, [popupInfo, popupContainer]);
 
+  const setBaseRouteLine = useCallback((geometry) => {
+    baseGeometryRef.current = geometry || null;
+    const map = mapRef.current;
+    if (!map) return;
+    ensureBaseRouteLayer(map, baseGeometryRef.current, darkModeRef.current);
+  }, []);
+
   const setRouteLine = useCallback((coordinates) => {
     currentCoordsRef.current = coordinates || [];
     const map = mapRef.current;
@@ -247,5 +323,5 @@ export function useMapController({
     map.fitBounds(bounds, { padding: 60, maxZoom: 18, duration: 1000 });
   }, []);
 
-  return { containerRef, setRouteLine, flyTo, fitBounds };
+  return { containerRef, setRouteLine, setBaseRouteLine, flyTo, fitBounds };
 }
