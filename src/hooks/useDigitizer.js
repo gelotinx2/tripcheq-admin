@@ -14,6 +14,7 @@ import {
   saveBackbone,
   saveDetour,
   updateTransitStop,
+  fetchDetourStopRows,
 } from "../services/transitApi";
 import { useBackboneForm } from "./useBackboneForm";
 import { useDetourForm } from "./useDetourForm";
@@ -216,7 +217,138 @@ export function useDigitizer({ darkMode } = {}) {
     detour.backboneStops,
   ]);
 
-  // Watch detour backbone changes to load its polyline for visual context
+  // Unified Detour State Loader (Handles both NEW and EDIT modes)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncDetourState() {
+      if (mappingMode !== "DETOUR") return;
+
+      // SCENARIO A: Editing an existing detour
+      if (
+        detour.detourEditId &&
+        detour.detourEditId !== "NEW" &&
+        detour.selectedDetour
+      ) {
+        setStatus("Loading detour stops...");
+        setRoutePolyline(detour.selectedDetour.encoded_polyline || null);
+
+        const { data: rows, error } = await fetchDetourStopRows(
+          detour.detourEditId,
+        );
+        if (cancelled) return;
+
+        if (error) {
+          console.error("Error loading detour stops:", error);
+          setStatus("");
+          return;
+        }
+
+        if (rows && rows.length > 0) {
+          // Find the backbone indexes so the UI numbering is correct
+          const splitOrder =
+            detour.backboneStops.findIndex(
+              (s) => s.stop_id === detour.splitStopId,
+            ) + 1;
+          const mergeOrder =
+            detour.backboneStops.findIndex(
+              (s) => s.stop_id === detour.mergeStopId,
+            ) + 1;
+
+          const loadedWaypoints = rows.map((row, index) => {
+            const w = stopRowToWaypoint(row, wp.nextId());
+            // Lock the first stop as the Split Anchor
+            if (index === 0) {
+              return {
+                ...w,
+                isAnchor: true,
+                isSplitAnchor: true,
+                backboneIndex: splitOrder > 0 ? splitOrder : 1,
+              };
+            }
+            // Lock the last stop as the Merge Anchor
+            if (index === rows.length - 1) {
+              return {
+                ...w,
+                isAnchor: true,
+                isMergeAnchor: true,
+                backboneIndex: mergeOrder > 0 ? mergeOrder : 2,
+              };
+            }
+            // Intermediate stops remain editable
+            return w;
+          });
+
+          wp.load(loadedWaypoints);
+
+          // Fly the camera to fit the loaded detour
+          const coords = loadedWaypoints.map((w) => [w.lng, w.lat]);
+          if (coords.length > 0) map.fitBounds(coords);
+        }
+        setStatus("");
+      }
+
+      // SCENARIO B: Creating a brand NEW detour
+      else if (
+        detour.splitStopId &&
+        detour.mergeStopId &&
+        detour.backboneStops.length > 0
+      ) {
+        setRoutePolyline(null);
+
+        const splitStop = data.stops.find((s) => s.id === detour.splitStopId);
+        const mergeStop = data.stops.find((s) => s.id === detour.mergeStopId);
+
+        const splitOrder =
+          detour.backboneStops.findIndex(
+            (s) => s.stop_id === detour.splitStopId,
+          ) + 1;
+        const mergeOrder =
+          detour.backboneStops.findIndex(
+            (s) => s.stop_id === detour.mergeStopId,
+          ) + 1;
+
+        if (splitStop && mergeStop) {
+          wp.apply(() => [
+            {
+              ...globalStopToWaypoint(splitStop, wp.nextId()),
+              isAnchor: true,
+              isSplitAnchor: true,
+              backboneIndex: splitOrder > 0 ? splitOrder : 1,
+            },
+            {
+              ...globalStopToWaypoint(mergeStop, wp.nextId()),
+              isAnchor: true,
+              isMergeAnchor: true,
+              backboneIndex: mergeOrder > 0 ? mergeOrder : 2,
+            },
+          ]);
+          map.flyTo([splitStop.longitude, splitStop.latitude], 15);
+        }
+      }
+
+      // SCENARIO C: Form is empty or incomplete
+      else {
+        wp.apply(() => []);
+        setRoutePolyline(null);
+      }
+    }
+
+    syncDetourState();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mappingMode,
+    detour.detourEditId,
+    detour.selectedDetour,
+    detour.splitStopId,
+    detour.mergeStopId,
+  ]);
+
+  // 2. UPGRADED: Detour backbone slicer that perfectly fills the gap
   useEffect(() => {
     if (mappingMode === "DETOUR") {
       if (!detour.backboneId) {
@@ -249,22 +381,44 @@ export function useDigitizer({ darkMode } = {}) {
           if (splitIdx !== -1 && mergeIdx !== -1) {
             const startIdx = Math.min(splitIdx, mergeIdx);
             const endIdx = Math.max(splitIdx, mergeIdx);
+
+            // Outer segments (gray dashed context)
             const segment1 = coords.slice(0, startIdx + 1);
             const segment2 = coords.slice(endIdx);
+
+            // Inner segment (original backbone path for the gap)
+            const innerSegment = coords.slice(startIdx, endIdx + 1);
 
             map.setBaseRouteLine({
               type: "MultiLineString",
               coordinates: [segment1, segment2],
             });
+
+            // Foreground Solid Cyan Line Logic
+            if (routePolyline) {
+              // Load the saved database polyline if editing a detour, or the newly snapped one
+              map.setRouteLine(decodePolyline(routePolyline));
+            } else if (wp.waypoints.length > 2) {
+              // Actively dropping pins: straight lines just to connect custom pins visually
+              map.setRouteLine(wp.waypoints.map((w) => [w.lng, w.lat]));
+            } else {
+              // No custom pins yet: perfectly fill the gap with the backbone's original road!
+              map.setRouteLine(innerSegment);
+            }
+
             return;
           }
         }
       }
 
-      map.setBaseRouteLine({
-        type: "LineString",
-        coordinates: coords,
-      });
+      // Fallback if split/merge not fully selected
+      map.setBaseRouteLine({ type: "LineString", coordinates: coords });
+
+      if (!routePolyline) {
+        map.setRouteLine(null);
+      } else {
+        map.setRouteLine(decodePolyline(routePolyline));
+      }
     } else {
       map.setBaseRouteLine(null);
     }
@@ -276,6 +430,8 @@ export function useDigitizer({ darkMode } = {}) {
     detour.mergeStopId,
     data.backbones,
     data.stops,
+    routePolyline,
+    wp.waypoints,
   ]);
 
   const changeRoute = (routeId) => {
@@ -592,6 +748,7 @@ export function useDigitizer({ darkMode } = {}) {
             triggerSignboard: detour.triggerSignboard,
             polyline: routePolyline,
             waypoints: wp.waypoints,
+            editId: detour.detourEditId !== "NEW" ? detour.detourEditId : null,
           });
         }
         flash("✅ Successfully saved to Supabase!", 5000);
@@ -617,17 +774,6 @@ export function useDigitizer({ darkMode } = {}) {
 
   const stopsDisabled = !bb.routeSelect && mappingMode === "BACKBONE";
 
-  useMemo(() => {
-    if (!routePolyline && wp.waypoints.length > 1) {
-      // For detours, we only want to connect the active segment,
-      // but drawing all waypoints is a safe visual approximation.
-      const coords = wp.waypoints.map((w) => [w.lng, w.lat]);
-      map.setRouteLine(coords);
-    } else if (!routePolyline && wp.waypoints.length <= 1) {
-      map.setRouteLine(null);
-    }
-  }, [wp.waypoints, routePolyline, map]);
-
   return {
     mapContainerRef: map.containerRef,
     status,
@@ -643,6 +789,8 @@ export function useDigitizer({ darkMode } = {}) {
       setNewRouteName: bb.setNewRouteName,
       newRouteMode: bb.newRouteMode,
       setNewRouteMode: bb.setNewRouteMode,
+      backboneName: bb.backboneName,
+      setBackboneName: bb.setBackboneName,
       direction: bb.direction,
       onDirectionChange: changeDirection,
       selectedEditId: bb.selectedEditId,
@@ -655,9 +803,16 @@ export function useDigitizer({ darkMode } = {}) {
     },
 
     detour: {
+      allRoutes: data.routes,
       allBackbones: data.backbones,
+      masterRouteId: detour.masterRouteId,
+      setMasterRouteId: detour.setMasterRouteId,
       backboneId: detour.backboneId,
       setBackboneId: detour.setBackboneId,
+      detourEditId: detour.detourEditId,
+      setDetourEditId: detour.setDetourEditId,
+      selectedDetour: detour.selectedDetour,
+      existingDetours: detour.existingDetours,
       backboneStops: detour.backboneStops,
       availableMergeStops: detour.availableMergeStops,
       splitStopId: detour.splitStopId,

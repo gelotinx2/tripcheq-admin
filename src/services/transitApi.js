@@ -43,6 +43,23 @@ export function fetchBackboneStopRows(backboneId, { ascending = true } = {}) {
     .order("stop_sequence", { ascending });
 }
 
+export function fetchDetourStopRows(detourId, { ascending = true } = {}) {
+  return supabase
+    .from("detour_stops")
+    .select(STOP_ROW_SELECT)
+    .eq("detour_id", detourId)
+    .order("stop_sequence", { ascending });
+}
+
+export async function fetchDetoursByBackbone(backboneId) {
+  const { data } = await supabase
+    .from("route_detours")
+    .select("*")
+    .eq("backbone_id", backboneId)
+    .order("name");
+  return data || [];
+}
+
 // ---------- SINGLE-STOP WRITES ----------
 
 // Returns { data, error }
@@ -191,6 +208,7 @@ export async function saveBackbone({
 }
 
 export async function saveDetour({
+  editId, // <--- Add this parameter
   backboneId,
   name,
   splitStopId,
@@ -199,19 +217,42 @@ export async function saveDetour({
   polyline,
   waypoints,
 }) {
-  const { data, error } = await supabase
-    .from("route_detours")
-    .insert({
-      backbone_id: backboneId,
-      name,
-      split_stop_id: splitStopId,
-      merge_stop_id: mergeStopId,
-      trigger_signboard: triggerSignboard,
-      encoded_polyline: polyline,
-    })
-    .select()
-    .single();
-  if (error) throw new Error("Detour Error: " + error.message);
+  let detour;
 
-  await linkStops("detour_stops", "detour_id", data.id, waypoints);
+  if (editId) {
+    const { data, error } = await supabase
+      .from("route_detours")
+      .update({
+        name,
+        split_stop_id: splitStopId,
+        merge_stop_id: mergeStopId,
+        trigger_signboard: triggerSignboard,
+        encoded_polyline: polyline,
+      })
+      .eq("id", editId)
+      .select()
+      .single();
+    if (error) throw new Error("Detour Update Error: " + error.message);
+    detour = data;
+
+    // Clear old stops before linking new ones
+    await supabase.from("detour_stops").delete().eq("detour_id", detour.id);
+  } else {
+    const { data, error } = await supabase
+      .from("route_detours")
+      .insert({
+        backbone_id: backboneId,
+        name,
+        split_stop_id: splitStopId,
+        merge_stop_id: mergeStopId,
+        trigger_signboard: triggerSignboard,
+        encoded_polyline: polyline,
+      })
+      .select()
+      .single();
+    if (error) throw new Error("Detour Error: " + error.message);
+    detour = data;
+  }
+
+  await linkStops("detour_stops", "detour_id", detour.id, waypoints);
 }
